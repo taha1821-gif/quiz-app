@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Student Quiz</title>
+  <style>
+    body { font-family: Arial; background:#f0f8ff; padding:20px; }
+    .question { margin:20px 0; padding:10px; }
+    .btn { margin:10px; padding:10px 20px; cursor:pointer; }
+    .logo-bar { display:flex; justify-content:space-between; align-items:center; }
+    .logo { height:60px; }
+  </style>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+  <div class="logo-bar">
+    <img src="school.png" class="logo">
+    <img src="logo.png" class="logo">
+  </div>
+
+  <h2>Student Quiz</h2>
+  <div id="quiz"></div>
+  <button id="nextBtn" class="btn" onclick="nextSection()">Next</button>
+  <button id="submitBtn" class="btn" style="display:none;" onclick="submitQuiz()">Submit</button>
+
+  <script>
+    // --- Firebase Configuration ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBzS3HoeUZ1ncjHKMyNhrySEQ4SXnRN3s4",
+      authDomain: "quizapp-8093a.firebaseapp.com",
+      databaseURL: "https://quizapp-8093a-default-rtdb.firebaseio.com",
+      projectId: "quizapp-8093a",
+      storageBucket: "quizapp-8093a.appspot.com",
+      messagingSenderId: "903966699269",
+      appId: "1:903966699269:web:1de90f50da022cf82f916c"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let section = 0;
+    let student = { name:"", class:"", answers:[], score:0 };
+    let questions = {};
+
+    function showNameClassForm() {
+      document.getElementById('quiz').innerHTML = `
+        <div class='question'>Name: <input id='name'></div>
+        <div class='question'>Class: 
+          <select id='class'>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+      `;
+    }
+
+    async function loadQuestions(classId) {
+      const snapshot = await db.ref('questions/' + classId).get();
+      if(snapshot.exists()) {
+        questions = snapshot.val();
+        studentQuestions = {
+          mcqs: questions.mcqs.sort(()=>0.5-Math.random()).slice(0,5),
+          trueFalse: questions.trueFalse.sort(()=>0.5-Math.random()).slice(0,5),
+          fillBlanks: questions.fillBlanks.sort(()=>0.5-Math.random()).slice(0,5)
+        };
+      } else {
+        alert("No questions found for this class!");
+      }
+    }
+
+    function showMCQ() {
+      let html = "<h3>MCQs</h3>";
+      studentQuestions.mcqs.forEach((q,i)=>{
+        html += `<div class='question'>${q.q}<br>`;
+        q.options.forEach(opt=>{
+          html += `<label><input type='radio' name='mcq${i}' value='${opt}'> ${opt}</label><br>`;
+        });
+        html += "</div>";
+      });
+      document.getElementById('quiz').innerHTML = html;
+    }
+
+    function showTF() {
+      let html = "<h3>True / False</h3>";
+      studentQuestions.trueFalse.forEach((q,i)=>{
+        html += `<div class='question'>${q.q}<br>
+          <label><input type='radio' name='tf${i}' value='True'> True</label>
+          <label><input type='radio' name='tf${i}' value='False'> False</label>
+        </div>`;
+      });
+      document.getElementById('quiz').innerHTML = html;
+    }
+
+    function showFill() {
+      let html = "<h3>Fill in the Blanks</h3>";
+      studentQuestions.fillBlanks.forEach((q,i)=>{
+        html += `<div class='question'>${q.q}<br>
+          <input type='text' name='fill${i}'></div>`;
+      });
+      document.getElementById('quiz').innerHTML = html;
+    }
+
+    function collectMCQ() {
+      studentQuestions.mcqs.forEach((q,i)=>{
+        let ans = document.querySelector(`input[name=mcq${i}]:checked`);
+        let given = ans ? ans.value : "";
+        if(given === q.answer) student.score++;
+        student.answers.push({q:q.q, type:"MCQ", correct:q.answer, given});
+      });
+    }
+
+    function collectTF() {
+      studentQuestions.trueFalse.forEach((q,i)=>{
+        let ans = document.querySelector(`input[name=tf${i}]:checked`);
+        let given = ans ? ans.value : "";
+        if(given === q.answer) student.score++;
+        student.answers.push({q:q.q, type:"TF", correct:q.answer, given});
+      });
+    }
+
+    function collectFill() {
+      studentQuestions.fillBlanks.forEach((q,i)=>{
+        let ans = document.querySelector(`input[name=fill${i}]`).value.trim();
+        if(ans.toLowerCase() === q.answer.toLowerCase()) student.score++;
+        student.answers.push({q:q.q, type:"Fill", correct:q.answer, given: ans});
+      });
+    }
+
+    async function nextSection() {
+      if(section === 0) {
+        student.name = document.getElementById('name').value.trim();
+        student.class = document.getElementById('class').value;
+        if(!student.name) { alert("Enter name!"); return; }
+        await loadQuestions(student.class);
+        showMCQ();
+      } else if(section === 1) {
+        collectMCQ();
+        showTF();
+      } else if(section === 2) {
+        collectTF();
+        showFill();
+        document.getElementById('nextBtn').style.display='none';
+        document.getElementById('submitBtn').style.display='inline';
+      }
+      section++;
+    }
+
+    async function submitQuiz() {
+      collectFill();
+      let ref = db.ref('results/' + student.class).push();
+      await ref.set(student);
+      document.getElementById('quiz').innerHTML="<h3>Thank you! Your quiz is submitted.</h3>";
+      document.getElementById('submitBtn').style.display="none";
+    }
+
+    showNameClassForm();
+  </script>
+</body>
+</html>
