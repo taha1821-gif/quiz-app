@@ -5,7 +5,7 @@
   <style>
     body { 
       font-family: Arial; 
-      background:#fff0f5; 
+      background:#e6f7ff; 
       margin:0;
       display:flex;
       flex-direction:column;
@@ -27,7 +27,7 @@
     .container {
       margin-top:30px;
       width:90%;
-      max-width:900px;
+      max-width:1000px;
       background:#ffffff;
       padding:20px;
       border-radius:10px;
@@ -44,7 +44,7 @@
       text-align:center; 
     }
     .btn { 
-      padding:6px 12px; 
+      padding:8px 16px; 
       margin:6px; 
       cursor:pointer; 
       border:none;
@@ -53,7 +53,14 @@
       color:white;
     }
     .btn:hover { background:#45a049; }
-    select { padding:6px; margin-left:10px; }
+    select, input { padding:6px; margin:6px; }
+    .hidden { display:none; }
+    .q-section {
+      margin-top:20px;
+      background:#f9f9f9;
+      padding:15px;
+      border-radius:8px;
+    }
   </style>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -80,6 +87,51 @@
       <tr><th>Name</th><th>Class</th><th>Score</th><th>Action</th></tr>
     </table>
     <div id="details"></div>
+
+    <hr>
+
+    <button class="btn" onclick="toggleQuestions()">📚 Manage Questions</button>
+
+    <div id="questionsPanel" class="hidden">
+      <h3>Manage Questions</h3>
+
+      <!-- MCQs -->
+      <div class="q-section">
+        <h4>MCQs</h4>
+        <input id="mcqClass" placeholder="Class (4/5/6)">
+        <input id="mcqQ" placeholder="Question">
+        <input id="mcqOpt1" placeholder="Option 1">
+        <input id="mcqOpt2" placeholder="Option 2">
+        <input id="mcqOpt3" placeholder="Option 3">
+        <input id="mcqOpt4" placeholder="Option 4">
+        <input id="mcqAns" placeholder="Correct Answer">
+        <button class="btn" onclick="addMCQ()">Add MCQ</button>
+        <div id="mcqList"></div>
+      </div>
+
+      <!-- True/False -->
+      <div class="q-section">
+        <h4>True/False</h4>
+        <input id="tfClass" placeholder="Class (4/5/6)">
+        <input id="tfQ" placeholder="Question">
+        <select id="tfAns">
+          <option value="True">True</option>
+          <option value="False">False</option>
+        </select>
+        <button class="btn" onclick="addTF()">Add True/False</button>
+        <div id="tfList"></div>
+      </div>
+
+      <!-- Fill in the Blanks -->
+      <div class="q-section">
+        <h4>Fill in the Blanks</h4>
+        <input id="fillClass" placeholder="Class (4/5/6)">
+        <input id="fillQ" placeholder="Question">
+        <input id="fillAns" placeholder="Correct Answer">
+        <button class="btn" onclick="addFill()">Add Fill Blank</button>
+        <div id="fillList"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -98,6 +150,7 @@
 
     let allStudents = [];
 
+    // ---------- STUDENT RESULTS ----------
     async function loadData() {
       let selectedClass = document.getElementById('filterClass').value;
       allStudents = [];
@@ -160,7 +213,96 @@
       link.click();
     }
 
+    // ---------- MANAGE QUESTIONS ----------
+    function toggleQuestions() {
+      document.getElementById("questionsPanel").classList.toggle("hidden");
+      loadQuestionLists();
+    }
+
+    async function addMCQ() {
+      let cls = document.getElementById('mcqClass').value;
+      let q = document.getElementById('mcqQ').value;
+      let opts = [
+        document.getElementById('mcqOpt1').value,
+        document.getElementById('mcqOpt2').value,
+        document.getElementById('mcqOpt3').value,
+        document.getElementById('mcqOpt4').value
+      ];
+      let ans = document.getElementById('mcqAns').value;
+      if(!cls || !q || !ans) { alert("Fill all fields!"); return; }
+      await db.ref(`questions/${cls}/mcqs`).push({q, options:opts, answer:ans});
+      loadQuestionLists();
+    }
+
+    async function addTF() {
+      let cls = document.getElementById('tfClass').value;
+      let q = document.getElementById('tfQ').value;
+      let ans = document.getElementById('tfAns').value;
+      if(!cls || !q) { alert("Fill all fields!"); return; }
+      await db.ref(`questions/${cls}/trueFalse`).push({q, answer:ans});
+      loadQuestionLists();
+    }
+
+    async function addFill() {
+      let cls = document.getElementById('fillClass').value;
+      let q = document.getElementById('fillQ').value;
+      let ans = document.getElementById('fillAns').value;
+      if(!cls || !q || !ans) { alert("Fill all fields!"); return; }
+      await db.ref(`questions/${cls}/fillBlanks`).push({q, answer:ans});
+      loadQuestionLists();
+    }
+
+    async function deleteQuestion(cls, type, key) {
+      await db.ref(`questions/${cls}/${type}/${key}`).remove();
+      loadQuestionLists();
+    }
+
+    async function loadQuestionLists() {
+      // Load MCQs
+      let mcqDiv = document.getElementById("mcqList");
+      mcqDiv.innerHTML = "<h5>Existing MCQs</h5>";
+      for(let cls of ["4","5","6"]) {
+        const snap = await db.ref(`questions/${cls}/mcqs`).get();
+        if(snap.exists()) {
+          snap.forEach(q=>{
+            let val = q.val();
+            mcqDiv.innerHTML += `<div>[Class ${cls}] ${val.q} 
+              <button onclick="deleteQuestion('${cls}','mcqs','${q.key}')">❌</button></div>`;
+          });
+        }
+      }
+
+      // Load TF
+      let tfDiv = document.getElementById("tfList");
+      tfDiv.innerHTML = "<h5>Existing True/False</h5>";
+      for(let cls of ["4","5","6"]) {
+        const snap = await db.ref(`questions/${cls}/trueFalse`).get();
+        if(snap.exists()) {
+          snap.forEach(q=>{
+            let val = q.val();
+            tfDiv.innerHTML += `<div>[Class ${cls}] ${val.q} (${val.answer}) 
+              <button onclick="deleteQuestion('${cls}','trueFalse','${q.key}')">❌</button></div>`;
+          });
+        }
+      }
+
+      // Load Fill
+      let fillDiv = document.getElementById("fillList");
+      fillDiv.innerHTML = "<h5>Existing Fill in the Blanks</h5>";
+      for(let cls of ["4","5","6"]) {
+        const snap = await db.ref(`questions/${cls}/fillBlanks`).get();
+        if(snap.exists()) {
+          snap.forEach(q=>{
+            let val = q.val();
+            fillDiv.innerHTML += `<div>[Class ${cls}] ${val.q} (Ans: ${val.answer}) 
+              <button onclick="deleteQuestion('${cls}','fillBlanks','${q.key}')">❌</button></div>`;
+          });
+        }
+      }
+    }
+
     loadData();
   </script>
 </body>
 </html>
+
